@@ -14,14 +14,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.io.*;
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
 
 @Service
 public class TradeEnrichmentServiceImpl implements TradeEnrichmentService {
@@ -36,36 +35,29 @@ public class TradeEnrichmentServiceImpl implements TradeEnrichmentService {
 
     @Override
     public List<EnrichedTrade> enrichTradesFromCsv(InputStream csvInputStream) {
-        List<EnrichedTrade> enrichedTrades = new ArrayList<>();
         AtomicInteger discardedRows = new AtomicInteger(0);
 
-        try (CSVReader reader = new CSVReaderBuilder(
-                new InputStreamReader(csvInputStream)).withSkipLines(1).build()) {
+        try (CSVReader reader = new CSVReaderBuilder(new InputStreamReader(csvInputStream))
+                .withSkipLines(1).build()) {
 
             List<CompletableFuture<Optional<Trade>>> futures = reader.readAll().stream()
-                    .map(row -> CompletableFuture.supplyAsync(() ->
-                            tradeRowProcessor.processRow(row, discardedRows), executor))
+                    .map(row -> CompletableFuture.supplyAsync(
+                            () -> tradeRowProcessor.processRow(row, discardedRows), executor))
                     .toList();
 
-            CompletableFuture<List<Optional<Trade>>> resultsFuture = CompletableFuture.allOf(
-                    futures.toArray(new CompletableFuture[0])).thenApply(v ->
-                    futures.stream()
-                            .map(CompletableFuture::join)
-                            .collect(Collectors.toList()));
-
-            enrichedTrades = resultsFuture.join()
-                    .stream()
-                    .filter(Optional::isPresent)
-                    .map(Optional::get)
+            List<EnrichedTrade> enrichedTrades = futures.stream()
+                    .map(CompletableFuture::join)
+                    .flatMap(Optional::stream)
                     .map(EnrichedTrade::toEnrichedTrade)
-                    .collect(Collectors.toList());
+                    .toList();
+
+            logger.info("Processed trades. Enriched: {}, Discarded: {}", enrichedTrades.size(), discardedRows.get());
+            return enrichedTrades;
 
         } catch (IOException | CsvException e) {
             logger.error("Error reading trade CSV file", e);
+            return Collections.emptyList();
         }
-
-        logger.info("Processed trades. Enriched: {}, Discarded: {}", enrichedTrades.size(), discardedRows.get());
-        return enrichedTrades;
     }
 
     @Override
