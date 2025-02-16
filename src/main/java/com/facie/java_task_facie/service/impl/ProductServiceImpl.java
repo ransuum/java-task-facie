@@ -26,6 +26,7 @@ public class ProductServiceImpl implements ProductService {
     @PostConstruct
     public void initialize() {
         try {
+            // Load products from CSV into the local cache.
             this.csvProductConfig.loadProductsFromCsv(this.productCache);
         } catch (Exception e) {
             log.error("Failed to load products from CSV", e);

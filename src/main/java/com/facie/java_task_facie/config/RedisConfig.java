@@ -18,8 +18,11 @@ public class RedisConfig {
 
     @Bean
     public CacheManager cacheManager(RedisConnectionFactory connectionFactory) {
+        // Define the default cache configuration
         RedisCacheConfiguration cacheConfiguration = RedisCacheConfiguration.defaultCacheConfig()
+                // Set the TTL (time-to-live) for cache entries to 10 minutes
                 .entryTtl(Duration.ofMinutes(10))
+                // Configure value serialization using GenericJackson2JsonRedisSerializer
                 .serializeValuesWith(RedisSerializationContext.SerializationPair
                         .fromSerializer(new GenericJackson2JsonRedisSerializer()));
 
